@@ -4,7 +4,8 @@ import time
 from PIL import Image
 import json
 import os
-import urllib.parse 
+import urllib.parse
+import random
 
 # ==========================================
 # 1. إعدادات الصفحة الأساسية
@@ -161,7 +162,7 @@ translations = {
 t = translations[st.session_state.lang]
 
 # ==========================================
-# 5. إعدادات API وتوليد الصور الفعلي (مع Gemini كمترجم)
+# 5. إعدادات API وتوليد الصور (محدثة بدقة مع Seed عشوائي)
 # ==========================================
 GEMINI_API_KEY = "AIzaSyDEtiBHPv4jTSI7dde0ff-DpLI2bgZJUJ0" 
 genai.configure(api_key=GEMINI_API_KEY)
@@ -169,25 +170,31 @@ genai.configure(api_key=GEMINI_API_KEY)
 def generate_car_image(prompt):
     with st.spinner(t["loading"]):
         try:
-            # استخدام Gemini لفهم السيارة والتعديلات وصياغتها باحترافية
+            # توجيه صارم جداً لجيميني ليعطينا فقط كلمات مفتاحية (Keywords) بدون أي فذلكة
             model = genai.GenerativeModel('gemini-1.5-flash')
-            ai_instruction = f"You are an expert prompt engineer for luxury and modern car photography (including Chinese brands like Haval, Tank, Jetour). Read this user request (which might be in Arabic): '{prompt}'. Write a highly detailed, photorealistic prompt in ENGLISH for an AI image generator. Focus heavily on accurately depicting the specific car brand and model requested, along with the exact color and modifications. Return ONLY the English prompt text, nothing else."
+            ai_instruction = f"""
+            Translate this car modification request to English and create a precise image generation prompt. 
+            Format exactly like this: [Year] [Brand] [Model], [Exterior or Interior], [Color], [Modifications], highly detailed, 8k resolution, photorealistic, luxury automotive photography.
+            IMPORTANT: Return ONLY the comma-separated prompt text. No introduction, no explanation, no markdown.
+            User Request: {prompt}
+            """
             
             response = model.generate_content(ai_instruction)
-            perfect_prompt = response.text.strip()
+            # تنظيف النص من أي مسافات أو أسطر إضافية
+            clean_prompt = response.text.replace('\n', ' ').strip()
             
-            # إضافة لمسات التصوير الاحترافي للنتيجة
-            final_prompt = perfect_prompt + ", 8k resolution, highly detailed, photorealistic, luxury automotive showroom lighting, perfect reflections"
-            safe_prompt = urllib.parse.quote(final_prompt)
+            safe_prompt = urllib.parse.quote(clean_prompt)
+            # إضافة رقم عشوائي (seed) لمنع الموقع من إعطائنا صورة قديمة مخزنة
+            random_seed = random.randint(1, 1000000)
             
-            image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=800&height=450&nologo=true"
+            image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=800&height=450&nologo=true&seed={random_seed}"
             time.sleep(2)
             return image_url
             
         except Exception as e:
-            # في حال واجه Gemini أي ضغط، نستخدم الطلب المباشر
-            safe_prompt = urllib.parse.quote("Accurate photorealistic car " + prompt)
-            return f"https://image.pollinations.ai/prompt/{safe_prompt}?width=800&height=450&nologo=true"
+            safe_prompt = urllib.parse.quote("Photorealistic car: " + prompt)
+            random_seed = random.randint(1, 1000000)
+            return f"https://image.pollinations.ai/prompt/{safe_prompt}?width=800&height=450&nologo=true&seed={random_seed}"
 
 # ==========================================
 # 6. واجهة المستخدم الرئيسية
@@ -217,7 +224,6 @@ if st.session_state.step == 0:
 # --- الخطوة 1 ---
 elif st.session_state.step == 1 and st.session_state.logged_in:
     st.subheader(t["step1_title"])
-    # إضافة السيارات الصينية وغيرها للقائمة
     car_brands = [
         "جيتور / Jetour", "هافال / Haval", "تانك / Tank", "شانجان / Changan", 
         "جيلي / Geely", "إم جي / MG", "مرسيدس / Mercedes", "بي إم دبليو / BMW", 
@@ -231,7 +237,7 @@ elif st.session_state.step == 1 and st.session_state.logged_in:
     with col1:
         if st.button(t["next"]):
             if model:
-                st.session_state.car_data['brand'] = brand.split(" / ")[1] # حفظ الاسم الإنجليزي لتسهيل التوليد
+                st.session_state.car_data['brand'] = brand.split(" / ")[1] if " / " in brand else brand
                 st.session_state.car_data['model'] = model
                 st.session_state.car_data['year'] = str(year)
                 next_step()
