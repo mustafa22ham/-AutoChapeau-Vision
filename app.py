@@ -2,6 +2,8 @@ import streamlit as st
 import google.generativeai as genai
 import time
 from PIL import Image
+import json
+import os
 
 # ==========================================
 # 1. إعدادات الصفحة الأساسية
@@ -9,7 +11,25 @@ from PIL import Image
 st.set_page_config(page_title="AutoChapeau Vision", page_icon="🚗", layout="centered")
 
 # ==========================================
-# 2. إدارة حالة الجلسة
+# 2. نظام إدارة المستخدمين (ملف JSON)
+# ==========================================
+USERS_FILE = "users.json"
+
+def load_users():
+    if not os.path.exists(USERS_FILE):
+        default_users = {"admin": "admin2026"}
+        with open(USERS_FILE, "w") as f:
+            json.dump(default_users, f)
+        return default_users
+    with open(USERS_FILE, "r") as f:
+        return json.load(f)
+
+def save_users(users_dict):
+    with open(USERS_FILE, "w") as f:
+        json.dump(users_dict, f)
+
+# ==========================================
+# 3. إدارة حالة الجلسة
 # ==========================================
 if 'lang' not in st.session_state:
     st.session_state.lang = "العربية"
@@ -17,12 +37,12 @@ if 'step' not in st.session_state:
     st.session_state.step = 0
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
+if 'current_user' not in st.session_state:
+    st.session_state.current_user = ""
 if 'car_data' not in st.session_state:
     st.session_state.car_data = {}
 if 'history' not in st.session_state:
     st.session_state.history = [] 
-if 'current_prompt' not in st.session_state:
-    st.session_state.current_prompt = ""
 
 def next_step():
     st.session_state.step += 1
@@ -32,10 +52,29 @@ def prev_step():
         st.session_state.step -= 1
 
 # ==========================================
-# 3. القائمة الجانبية واللغة
+# 4. القائمة الجانبية (اللغة ولوحة الإدارة)
 # ==========================================
 st.sidebar.title("🌍 Language / اللغة")
 st.session_state.lang = st.sidebar.radio("", ["العربية", "English"], index=0 if st.session_state.lang == "العربية" else 1)
+
+# لوحة تحكم الأدمن (تظهر فقط إذا كان المسجل هو admin)
+if st.session_state.logged_in and st.session_state.current_user == "admin":
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("👑 لوحة إدارة المناديب")
+    new_username = st.sidebar.text_input("اسم المستخدم الجديد")
+    new_password = st.sidebar.text_input("كلمة المرور الجديدة", type="password")
+    
+    if st.sidebar.button("إضافة المندوب"):
+        if new_username and new_password:
+            users_db = load_users()
+            if new_username in users_db:
+                st.sidebar.error("هذا المستخدم موجود مسبقاً!")
+            else:
+                users_db[new_username] = new_password
+                save_users(users_db)
+                st.sidebar.success(f"تم إضافة ({new_username}) بنجاح!")
+        else:
+            st.sidebar.warning("الرجاء تعبئة الاسم وكلمة المرور.")
 
 # قاموس الترجمة
 translations = {
@@ -121,18 +160,19 @@ translations = {
 t = translations[st.session_state.lang]
 
 # ==========================================
-# 4. إعدادات API
+# 5. إعدادات API والصورة الوهمية المستقرة
 # ==========================================
 GEMINI_API_KEY = "AIzaSyDEtiBHPv4jTSI7dde0ff-DpLI2bgZJUJ0" 
 genai.configure(api_key=GEMINI_API_KEY)
 
 def generate_car_image(prompt):
     with st.spinner(t["loading"]):
-        time.sleep(3) 
-        return "https://via.placeholder.com/800x400.png?text=AutoChapeau+Generated+Car+Image"
+        time.sleep(2) 
+        # تم تغيير الرابط ليكون مستقراً ويعرض لوناً مطابقاً لهويتك
+        return "https://dummyimage.com/800x400/8A1538/ffffff.png&text=AutoChapeau+Preview"
 
 # ==========================================
-# 5. واجهة المستخدم والتنقل
+# 6. واجهة المستخدم الرئيسية
 # ==========================================
 try:
     logo = Image.open("AutoChapeau Logo.png")
@@ -143,12 +183,15 @@ except:
 # --- الخطوة 0 ---
 if st.session_state.step == 0:
     st.subheader(t["login_title"])
-    users = {"agent1": "pass123", "admin": "admin2026"}
+    
     username = st.text_input(t["username"])
     password = st.text_input(t["password"], type="password")
+    
     if st.button(t["login_btn"]):
-        if username in users and users[username] == password:
+        users_db = load_users()
+        if username in users_db and users_db[username] == password:
             st.session_state.logged_in = True
+            st.session_state.current_user = username
             st.success(t["login_success"])
             next_step()
             st.rerun()
@@ -192,7 +235,6 @@ elif st.session_state.step == 2:
                 st.session_state.car_data['mod_type'] = mod_type
                 st.session_state.car_data['color'] = color
                 prompt = f"Car {st.session_state.car_data['brand']} {st.session_state.car_data['model']}. Color: {color}. Mods: {extra_mods}"
-                st.session_state.current_prompt = prompt
                 img_url = generate_car_image(prompt)
                 st.session_state.history.append({"prompt": prompt, "image": img_url, "iteration": 1})
                 next_step()
