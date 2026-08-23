@@ -4,7 +4,7 @@ import time
 from PIL import Image
 import json
 import os
-import urllib.parse  # تمت إضافة هذه المكتبة لمعالجة النصوص للذكاء الاصطناعي
+import urllib.parse 
 
 # ==========================================
 # 1. إعدادات الصفحة الأساسية
@@ -58,7 +58,7 @@ def prev_step():
 st.sidebar.title("🌍 Language / اللغة")
 st.session_state.lang = st.sidebar.radio("", ["العربية", "English"], index=0 if st.session_state.lang == "العربية" else 1)
 
-# لوحة تحكم الأدمن (تظهر فقط إذا كان المسجل هو admin)
+# لوحة تحكم الأدمن
 if st.session_state.logged_in and st.session_state.current_user == "admin":
     st.sidebar.markdown("---")
     st.sidebar.subheader("👑 لوحة إدارة المناديب")
@@ -88,7 +88,7 @@ translations = {
         "login_error": "اسم المستخدم أو كلمة المرور غير صحيحة.",
         "step1_title": "الخطوة 1: معلومات السيارة الأساسية",
         "brand": "العلامة التجارية",
-        "model": "فئة السيارة (مثال: S-Class)",
+        "model": "فئة السيارة (مثال: Dargo, 300, S-Class)",
         "year": "سنة التصنيع",
         "next": "التالي",
         "logout": "تسجيل الخروج",
@@ -98,7 +98,7 @@ translations = {
         "exterior": "خارجي (Exterior)",
         "interior": "داخلي (Interior)",
         "color": "اللون المطلوب",
-        "extra_mods": "تعديلات إضافية",
+        "extra_mods": "تعديلات إضافية (عربي أو إنجليزي)",
         "prev_btn": "السابق",
         "generate_btn": "توليد الصورة المبدئية",
         "warn_color": "الرجاء إدخال اللون.",
@@ -116,7 +116,7 @@ translations = {
         "version": "النسخة",
         "video_title": "فيديو 360 درجة",
         "new_project_btn": "مشروع جديد",
-        "loading": "جاري تطبيق التعديلات..."
+        "loading": "جاري تطبيق التعديلات بذكاء..."
     },
     "English": {
         "login_title": "Agent Login",
@@ -127,7 +127,7 @@ translations = {
         "login_error": "Invalid credentials.",
         "step1_title": "Step 1: Car Info",
         "brand": "Brand",
-        "model": "Model (e.g., S-Class)",
+        "model": "Model (e.g., Dargo, 300, S-Class)",
         "year": "Year",
         "next": "Next",
         "logout": "Logout",
@@ -155,27 +155,39 @@ translations = {
         "version": "Version",
         "video_title": "360 Video",
         "new_project_btn": "New Project",
-        "loading": "Applying mods..."
+        "loading": "Applying mods smartly..."
     }
 }
 t = translations[st.session_state.lang]
 
 # ==========================================
-# 5. إعدادات API وتوليد الصور الفعلي 
+# 5. إعدادات API وتوليد الصور الفعلي (مع Gemini كمترجم)
 # ==========================================
 GEMINI_API_KEY = "AIzaSyDEtiBHPv4jTSI7dde0ff-DpLI2bgZJUJ0" 
 genai.configure(api_key=GEMINI_API_KEY)
 
 def generate_car_image(prompt):
     with st.spinner(t["loading"]):
-        # إضافة كلمات مفتاحية لضمان دقة وواقعية صورة السيارة
-        enhanced_prompt = prompt + ", highly detailed, 8k resolution, photorealistic, luxury automotive showroom lighting, perfect reflections"
-        # تحويل النص ليكون صالحاً للاستخدام كرابط
-        safe_prompt = urllib.parse.quote(enhanced_prompt)
-        # استدعاء أداة التوليد السريعة
-        image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=800&height=450&nologo=true"
-        time.sleep(2) # انتظار بسيط لضمان تحميل الصورة
-        return image_url
+        try:
+            # استخدام Gemini لفهم السيارة والتعديلات وصياغتها باحترافية
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            ai_instruction = f"You are an expert prompt engineer for luxury and modern car photography (including Chinese brands like Haval, Tank, Jetour). Read this user request (which might be in Arabic): '{prompt}'. Write a highly detailed, photorealistic prompt in ENGLISH for an AI image generator. Focus heavily on accurately depicting the specific car brand and model requested, along with the exact color and modifications. Return ONLY the English prompt text, nothing else."
+            
+            response = model.generate_content(ai_instruction)
+            perfect_prompt = response.text.strip()
+            
+            # إضافة لمسات التصوير الاحترافي للنتيجة
+            final_prompt = perfect_prompt + ", 8k resolution, highly detailed, photorealistic, luxury automotive showroom lighting, perfect reflections"
+            safe_prompt = urllib.parse.quote(final_prompt)
+            
+            image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=800&height=450&nologo=true"
+            time.sleep(2)
+            return image_url
+            
+        except Exception as e:
+            # في حال واجه Gemini أي ضغط، نستخدم الطلب المباشر
+            safe_prompt = urllib.parse.quote("Accurate photorealistic car " + prompt)
+            return f"https://image.pollinations.ai/prompt/{safe_prompt}?width=800&height=450&nologo=true"
 
 # ==========================================
 # 6. واجهة المستخدم الرئيسية
@@ -189,10 +201,8 @@ except:
 # --- الخطوة 0 ---
 if st.session_state.step == 0:
     st.subheader(t["login_title"])
-    
     username = st.text_input(t["username"])
     password = st.text_input(t["password"], type="password")
-    
     if st.button(t["login_btn"]):
         users_db = load_users()
         if username in users_db and users_db[username] == password:
@@ -207,7 +217,13 @@ if st.session_state.step == 0:
 # --- الخطوة 1 ---
 elif st.session_state.step == 1 and st.session_state.logged_in:
     st.subheader(t["step1_title"])
-    brand = st.selectbox(t["brand"], ["Mercedes", "BMW", "Range Rover", "Porsche", "Audi", "Other"])
+    # إضافة السيارات الصينية وغيرها للقائمة
+    car_brands = [
+        "جيتور / Jetour", "هافال / Haval", "تانك / Tank", "شانجان / Changan", 
+        "جيلي / Geely", "إم جي / MG", "مرسيدس / Mercedes", "بي إم دبليو / BMW", 
+        "رينج روفر / Range Rover", "أخرى / Other"
+    ]
+    brand = st.selectbox(t["brand"], car_brands)
     model = st.text_input(t["model"])
     year = st.selectbox(t["year"], list(range(2027, 2010, -1)))
     
@@ -215,7 +231,7 @@ elif st.session_state.step == 1 and st.session_state.logged_in:
     with col1:
         if st.button(t["next"]):
             if model:
-                st.session_state.car_data['brand'] = brand
+                st.session_state.car_data['brand'] = brand.split(" / ")[1] # حفظ الاسم الإنجليزي لتسهيل التوليد
                 st.session_state.car_data['model'] = model
                 st.session_state.car_data['year'] = str(year)
                 next_step()
@@ -240,7 +256,7 @@ elif st.session_state.step == 2:
             if color:
                 st.session_state.car_data['mod_type'] = mod_type
                 st.session_state.car_data['color'] = color
-                prompt = f"Car {st.session_state.car_data['brand']} {st.session_state.car_data['model']}. Color: {color}. Mods: {extra_mods}. View: {mod_type}"
+                prompt = f"Car: {st.session_state.car_data['year']} {st.session_state.car_data['brand']} {st.session_state.car_data['model']}. View: {mod_type}. Color: {color}. Modifications: {extra_mods}."
                 img_url = generate_car_image(prompt)
                 st.session_state.history.append({"prompt": prompt, "image": img_url, "iteration": 1})
                 next_step()
@@ -257,7 +273,6 @@ elif st.session_state.step == 3:
     st.subheader(t["step3_title"])
     latest_gen = st.session_state.history[-1]
     
-    # عرض الصورة المولدة
     st.image(latest_gen["image"], caption=f"{t['mod_num']} {latest_gen['iteration']}", use_container_width=True)
     
     st.markdown(t["any_more_mods"])
@@ -271,7 +286,7 @@ elif st.session_state.step == 3:
     with col2:
         if st.button(t["apply_mod_btn"]):
             if new_mod:
-                updated_prompt = latest_gen["prompt"] + f". Apply new change: {new_mod}"
+                updated_prompt = latest_gen["prompt"] + f" Add this modification: {new_mod}"
                 img_url = generate_car_image(updated_prompt)
                 st.session_state.history.append({"prompt": updated_prompt, "image": img_url, "iteration": latest_gen['iteration'] + 1})
                 st.rerun()
