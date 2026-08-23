@@ -4,6 +4,7 @@ import time
 from PIL import Image
 import json
 import os
+import urllib.parse  # تمت إضافة هذه المكتبة لمعالجة النصوص للذكاء الاصطناعي
 
 # ==========================================
 # 1. إعدادات الصفحة الأساسية
@@ -160,16 +161,21 @@ translations = {
 t = translations[st.session_state.lang]
 
 # ==========================================
-# 5. إعدادات API والصورة الوهمية المستقرة
+# 5. إعدادات API وتوليد الصور الفعلي 
 # ==========================================
 GEMINI_API_KEY = "AIzaSyDEtiBHPv4jTSI7dde0ff-DpLI2bgZJUJ0" 
 genai.configure(api_key=GEMINI_API_KEY)
 
 def generate_car_image(prompt):
     with st.spinner(t["loading"]):
-        time.sleep(2) 
-        # تم تغيير الرابط ليكون مستقراً ويعرض لوناً مطابقاً لهويتك
-        return "https://dummyimage.com/800x400/8A1538/ffffff.png&text=AutoChapeau+Preview"
+        # إضافة كلمات مفتاحية لضمان دقة وواقعية صورة السيارة
+        enhanced_prompt = prompt + ", highly detailed, 8k resolution, photorealistic, luxury automotive showroom lighting, perfect reflections"
+        # تحويل النص ليكون صالحاً للاستخدام كرابط
+        safe_prompt = urllib.parse.quote(enhanced_prompt)
+        # استدعاء أداة التوليد السريعة
+        image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=800&height=450&nologo=true"
+        time.sleep(2) # انتظار بسيط لضمان تحميل الصورة
+        return image_url
 
 # ==========================================
 # 6. واجهة المستخدم الرئيسية
@@ -234,7 +240,7 @@ elif st.session_state.step == 2:
             if color:
                 st.session_state.car_data['mod_type'] = mod_type
                 st.session_state.car_data['color'] = color
-                prompt = f"Car {st.session_state.car_data['brand']} {st.session_state.car_data['model']}. Color: {color}. Mods: {extra_mods}"
+                prompt = f"Car {st.session_state.car_data['brand']} {st.session_state.car_data['model']}. Color: {color}. Mods: {extra_mods}. View: {mod_type}"
                 img_url = generate_car_image(prompt)
                 st.session_state.history.append({"prompt": prompt, "image": img_url, "iteration": 1})
                 next_step()
@@ -250,6 +256,8 @@ elif st.session_state.step == 2:
 elif st.session_state.step == 3:
     st.subheader(t["step3_title"])
     latest_gen = st.session_state.history[-1]
+    
+    # عرض الصورة المولدة
     st.image(latest_gen["image"], caption=f"{t['mod_num']} {latest_gen['iteration']}", use_container_width=True)
     
     st.markdown(t["any_more_mods"])
@@ -263,7 +271,7 @@ elif st.session_state.step == 3:
     with col2:
         if st.button(t["apply_mod_btn"]):
             if new_mod:
-                updated_prompt = latest_gen["prompt"] + f" Add: {new_mod}"
+                updated_prompt = latest_gen["prompt"] + f". Apply new change: {new_mod}"
                 img_url = generate_car_image(updated_prompt)
                 st.session_state.history.append({"prompt": updated_prompt, "image": img_url, "iteration": latest_gen['iteration'] + 1})
                 st.rerun()
